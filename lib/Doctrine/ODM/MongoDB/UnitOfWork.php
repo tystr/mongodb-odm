@@ -512,7 +512,9 @@ class UnitOfWork implements PropertyChangedListener
      */
     private function computeSingleDocumentChangeSet($document)
     {
-        if ($this->getDocumentState($document) !== self::STATE_MANAGED) {
+        if ($this->getDocumentState($document) === self::STATE_REMOVED) {
+            $this->scheduleForDelete($document);
+        } elseif ($this->getDocumentState($document) !== self::STATE_MANAGED) {
             throw new \InvalidArgumentException("Document has to be managed for single computation " . self::objToStr($document));
         }
 
