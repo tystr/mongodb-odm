@@ -19,6 +19,7 @@
 
 namespace Doctrine\ODM\MongoDB;
 
+use Doctrine\Common\Collections\Criteria;
 use Doctrine\Common\Persistence\ObjectRepository;
 use Doctrine\ODM\MongoDB\Mapping\MappingException;
 
@@ -244,5 +245,17 @@ class DocumentRepository implements ObjectRepository
     public function getClassName()
     {
         return $this->getDocumentName();
+    }
+
+    /**
+     * @param Criteria $criteria
+     *
+     * @return Cursor
+     */
+    public function matching(Criteria $criteria)
+    {
+        $persister = $this->dm->getUnitOfWork()->getDocumentPersister($this->documentName);
+
+        return $persister->loadAll($persister->loadCriteria($criteria));
     }
 }
