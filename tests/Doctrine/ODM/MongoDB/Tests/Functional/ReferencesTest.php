@@ -2,6 +2,7 @@
 
 namespace Doctrine\ODM\MongoDB\Tests\Functional;
 
+use Doctrine\Common\Collections\Criteria;
 use Documents\Address;
 use Documents\Profile;
 use Documents\Phonenumber;
@@ -189,6 +190,24 @@ class ReferencesTest extends \Doctrine\ODM\MongoDB\Tests\BaseTest
 
         $this->assertEquals('test', $groups[0]->getName());
         $this->assertEquals(1, count($groups));
+    }
+
+    public function testMatchingCriteria()
+    {
+        $user = new \Documents\User();
+        $user->addGroup(new Group('Group 1'));
+        $user->addGroup(new Group('Group 2'));
+        $this->dm->persist($user);
+        $this->dm->flush();
+
+        $criteria = Criteria::create();
+        $criteria->where($criteria->expr()->eq('name', 'Group 2'));
+
+        $groups = $user->getGroups();
+
+        $matchedGroups = $groups->matching($criteria);
+        $this->assertEquals(1, $matchedGroups->count());
+        $this->assertEquals('Group 2', $matchedGroups->getNext()->getName());
     }
 
     public function testSortReferenceManyOwningSide()
