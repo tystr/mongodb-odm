@@ -20,7 +20,10 @@
 namespace Doctrine\ODM\MongoDB;
 
 use Doctrine\Common\Collections\Collection as BaseCollection;
+use Doctrine\Common\Collections\Criteria;
 use Doctrine\ODM\MongoDB\Mapping\ClassMetadata;
+use Doctrine\ODM\MongoDB\Mapping\ClassMetadataInfo;
+use Doctrine\Common\Collections\ArrayCollection;
 
 /**
  * A PersistentCollection represents a collection of elements that have persistent state.
@@ -692,5 +695,57 @@ class PersistentCollection implements BaseCollection
         $this->snapshot = array();
 
         $this->changed();
+    }
+
+    /**
+     * Select all elements from a selectable that match the expression and
+     * return a new collection containing these elements.
+     *
+     * @param \Doctrine\Common\Collections\Criteria $criteria
+     * @return Collection
+     */
+    public function matching(Criteria $criteria)
+    {
+        if ($this->isDirty) {
+            $this->initialize();
+        }
+
+        if ($this->initialized) {
+            return $this->coll->matching($criteria);
+        }
+
+        $metadata = $this->dm->getClassMetadata($this->mapping['targetDocument']);
+
+        $backRefFieldName = $this->mapping['inversedBy'] ?: $this->mapping['mappedBy'];
+        $assocMapping = $metadata->getFieldMapping($backRefFieldName);
+        if ($assocMapping['association'] !== ClassMetadataInfo::REFERENCE_ONE) {
+            throw new \RuntimeException(
+                'Matching Criteria on PersistentCollection only works on OneToMany associations at the moment.'
+            );
+        }
+
+        $ownerMetadata = $this->dm->getClassMetadata(get_class($this->owner));
+        $id = $ownerMetadata->getIdentifierValue($this->owner);
+
+        $builder         = Criteria::expr();
+        $ownerExpression = $builder->eq($backRefFieldName, $id);
+        $expression      = $criteria->getWhereExpression();
+        $expression      = $expression ? $builder->andX($expression, $ownerExpression) : $ownerExpression;
+
+        $criteria->where($expression);
+        $persister = $this->dm->getUnitOfWork()->getDocumentPersister($this->mapping['targetDocument']);
+        $query = $persister->loadCriteria($criteria);
+        if (empty($this->mapping['simple'])) {
+            $query[$backRefFieldName] = $this->dm->createDBRef($this->owner, $this->mapping);
+        }
+
+        // @TODO Handle Criteria Conditions (neq, gt, etc)
+
+        return $persister->loadAll(
+            $query,
+            $criteria->getOrderings(),
+            $criteria->getMaxResults(),
+            $criteria->getFirstResult()
+        );
     }
 }

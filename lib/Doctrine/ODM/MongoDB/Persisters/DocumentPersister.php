@@ -19,6 +19,7 @@
 
 namespace Doctrine\ODM\MongoDB\Persisters;
 
+use Doctrine\Common\Collections\Criteria;
 use Doctrine\Common\EventManager;
 use Doctrine\MongoDB\Cursor as BaseCursor;
 use Doctrine\MongoDB\Iterator;
@@ -741,6 +742,7 @@ class DocumentPersister
             isset($mapping['criteria']) ? $mapping['criteria'] : array()
         );
         $criteria = $this->uow->getDocumentPersister($mapping['targetDocument'])->prepareQueryOrNewObj($criteria);
+
         $qb = $this->dm->createQueryBuilder($mapping['targetDocument'])
             ->setQueryArray($criteria);
 
@@ -1078,5 +1080,41 @@ class DocumentPersister
             }
         }
         return $discriminatorValues;
+    }
+
+    /**
+     * Expand Criteria Parameters by walking the expressions and grabbing all
+     * parameters and types from it.
+     *
+     * @param \Doctrine\Common\Collections\Criteria $criteria
+     *
+     * @return array
+     */
+    private function expandCriteriaParameters(Criteria $criteria)
+    {
+        $expression = $criteria->getWhereExpression();
+        if ($expression === null) {
+            return array();
+        }
+
+        $valueVisitor = new MongoValueVisitor();
+        $valueVisitor->dispatch($expression);
+
+        $query = array();
+        foreach ($valueVisitor->getTypes() as $value) {
+            $query[$value[0]] = $value[1];
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param Criteria $criteria
+     *
+     * @return array
+     */
+    public function loadCriteria(Criteria $criteria)
+    {
+        return $this->expandCriteriaParameters($criteria);
     }
 }
